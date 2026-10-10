@@ -1,0 +1,2612 @@
+"""Main PySide6 interface for the ЖКХ application."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from PySide6.QtCore import QPointF, QSettings, QTimer, Qt, Signal
+
+from PySide6.QtCore import QPointF, QTimer, Qt, Signal
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QPainter,
+    QPen,
+)
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from app.services.meter_service import (
+    create_meter,
+    create_property,
+    create_reading,
+    list_meters,
+    list_properties,
+    list_readings,
+    remove_meter,
+)
+
+
+NAVY = "#203f91"
+NAVY_DARK = "#172d68"
+PINK = "#f9dddd"
+PINK_ACTIVE = "#ead0d8"
+BACKGROUND = "#f5f7fa"
+WHITE = "#ffffff"
+TEXT = "#111827"
+MUTED = "#6b7280"
+GREEN = "#00b979"
+RED = "#ff4b4b"
+YELLOW = "#ffc400"
+BLUE = "#2955d9"
+GRAY_BLUE = "#8392aa"
+
+
+class LoginDialog(QDialog):
+    """Login dialog based on the provided UI mockup."""
+
+    def __init__(self) -> None:
+        """Initialize the login dialog."""
+        super().__init__()
+
+        self.settings = QSettings("JKHApp", "MonitoringExpenses")
+        self.user_name = self.settings.value("user/name", "", type=str)
+
+        self.setWindowTitle("Мониторинг расходов ЖКХ")
+        self.setFixedSize(560, 620)
+
+        self.setStyleSheet(
+            """
+            QDialog {
+                background: #f5f7fa;
+            }
+
+            QFrame#loginCard {
+                background: white;
+                border: 1px solid #111827;
+                border-radius: 18px;
+            }
+
+            QLabel#loginTitle {
+                color: #111827;
+                font-size: 21px;
+                font-weight: 700;
+            }
+
+            QLabel#loginSubtitle {
+                color: #6b7b9a;
+                font-size: 14px;
+            }
+
+            QLabel {
+                color: #111827;
+            }
+
+            QLineEdit {
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 10px;
+                background: white;
+            }
+
+            QPushButton {
+                background: #203f91;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-size: 14px;
+            }
+
+            QPushButton:hover {
+                background: #172d68;
+            }
+
+            QPushButton#secondary {
+                background: white;
+                color: #203f91;
+                border: 1px solid #203f91;
+            }
+
+            QLabel#link {
+                color: #203f91;
+            }
+            """
+        )
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(60, 38, 60, 38)
+
+        card = QFrame()
+        card.setObjectName("loginCard")
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(42, 30, 42, 28)
+        card_layout.setSpacing(10)
+
+        title = QLabel("Мониторинг расходов ЖКХ")
+        title.setObjectName("loginTitle")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        subtitle = QLabel("Вход в систему")
+        subtitle.setObjectName("loginSubtitle")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        card_layout.addWidget(title)
+        card_layout.addSpacing(8)
+        card_layout.addWidget(subtitle)
+        card_layout.addSpacing(15)
+        name_label = QLabel("Ваше имя")
+
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Введите ваше имя")
+        self.name_input.setText(self.user_name)
+
+        card_layout.addWidget(name_label)
+        card_layout.addWidget(self.name_input)
+
+        login_label = QLabel("Логин")
+        self.login_input = QLineEdit()
+        self.login_input.setPlaceholderText("Введите логин")
+
+        password_label = QLabel("Пароль")
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Введите пароль")
+        self.password_input.setEchoMode(
+            QLineEdit.EchoMode.Password
+        )
+
+        card_layout.addWidget(login_label)
+        card_layout.addWidget(self.login_input)
+        card_layout.addWidget(password_label)
+        card_layout.addWidget(self.password_input)
+
+        card_layout.addSpacing(15)
+
+        registration_button = QPushButton("Регистрация")
+        registration_button.setObjectName("secondary")
+        registration_button.clicked.connect(self._registration)
+
+        login_button = QPushButton("Войти в аккаунт")
+        login_button.clicked.connect(self._login)
+
+        or_label = QLabel("Или")
+        or_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        gosuslugi_button = QPushButton("Войти через гос.услуги")
+        gosuslugi_button.clicked.connect(self._gosuslugi)
+
+        card_layout.addWidget(registration_button)
+        card_layout.addSpacing(12)
+        card_layout.addWidget(login_button)
+        card_layout.addWidget(or_label)
+        card_layout.addWidget(gosuslugi_button)
+
+        outer_layout.addStretch()
+        outer_layout.addWidget(card)
+        outer_layout.addStretch()
+
+        self.login_input.setText("demo")
+        self.password_input.setText("demo")
+
+    def _login(self) -> None:
+        """Validate demo credentials."""
+        login = self.login_input.text().strip()
+        password = self.password_input.text()
+
+        if login == "demo" and password == "demo":
+            name = self.name_input.text().strip()
+
+            if not name:
+                QMessageBox.warning(
+                    self,
+                    "Не указано имя",
+                    "Введите ваше имя перед входом.",
+                )
+                return
+
+            self.user_name = name
+            self.settings.setValue("user/name", name)
+            self.settings.sync()
+
+            self.accept()
+            return
+
+        QMessageBox.warning(
+            self,
+            "Ошибка входа",
+            "Для демонстрационного режима используйте:\n\n"
+            "Логин: demo\n"
+            "Пароль: demo",
+        )
+
+    def _registration(self) -> None:
+        """Show registration information."""
+        QMessageBox.information(
+            self,
+            "Регистрация",
+            "Форма регистрации будет подключена к базе данных "
+            "на следующем этапе.",
+        )
+
+    def _gosuslugi(self) -> None:
+        """Show the external authorization information."""
+        QMessageBox.information(
+            self,
+            "Госуслуги",
+            "Демонстрационная кнопка авторизации через Госуслуги.",
+        )
+
+
+class DonutChart(QWidget):
+    """Simple donut chart for analytics."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize the chart."""
+        super().__init__(parent)
+        self.setMinimumSize(330, 300)
+
+    def paintEvent(self, event) -> None:
+        """Paint the donut chart."""
+        del event
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        values = [
+            (20, QColor("#718096")),
+            (25, QColor("#2955d9")),
+            (55, QColor("#ffc400")),
+        ]
+
+        total = sum(value for value, _ in values)
+
+        center = QPointF(
+            self.width() * 0.42,
+            self.height() * 0.50,
+        )
+
+        radius = min(self.width(), self.height()) * 0.30
+        width = radius * 0.30
+
+        start_angle = -90.0
+
+        for value, color in values:
+            span_angle = 360.0 * value / total
+
+            pen = QPen(color)
+            pen.setWidthF(width)
+            pen.setCapStyle(Qt.PenCapStyle.Round)
+
+            painter.setPen(pen)
+            painter.drawArc(
+                int(center.x() - radius),
+                int(center.y() - radius),
+                int(radius * 2),
+                int(radius * 2),
+                int(-start_angle * 16),
+                int(-span_angle * 16),
+            )
+
+            start_angle += span_angle
+
+        painter.end()
+
+
+class ResourceBars(QWidget):
+    """Display monthly resource consumption bars."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize the resource chart."""
+        super().__init__(parent)
+        self.setMinimumHeight(270)
+
+    def paintEvent(self, event) -> None:
+        """Paint monthly resource bars."""
+        del event
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        months = ["Май", "Июнь", "Июль", "Август", "Сентябрь"]
+        values = [70, 95, 25, 25, 98]
+        colors = [
+            QColor("#29458f"),
+            QColor("#ffc400"),
+            QColor("#9aa8bd"),
+            QColor("#9aa8bd"),
+            QColor("#ffc400"),
+        ]
+
+        chart_left = 30
+        chart_right = self.width() - 30
+        chart_bottom = self.height() - 48
+        chart_top = 30
+
+        available_width = chart_right - chart_left
+        gap = available_width / len(months)
+
+        for index, month in enumerate(months):
+            bar_width = 18
+            x = chart_left + gap * index + gap / 2 - bar_width / 2
+
+            height = (
+                values[index]
+                / 100
+                * (chart_bottom - chart_top)
+            )
+
+            painter.setBrush(QBrush(colors[index]))
+            painter.setPen(Qt.PenStyle.NoPen)
+
+            painter.drawRoundedRect(
+                int(x),
+                int(chart_bottom - height),
+                bar_width,
+                int(height),
+                5,
+                5,
+            )
+
+            painter.setPen(QPen(QColor(TEXT)))
+            painter.setFont(QFont("Arial", 10))
+
+            text_rect = painter.boundingRect(
+                int(x - 20),
+                chart_bottom + 10,
+                60,
+                25,
+                Qt.AlignmentFlag.AlignCenter,
+                month,
+            )
+
+            painter.drawText(text_rect, month)
+
+        painter.end()
+
+
+class MainWindow(QMainWindow):
+    """Main application window matching the supplied mockups."""
+
+    page_changed = Signal(int)
+
+    def __init__(self, user_name: str) -> None:
+        """Initialize the main window."""
+        super().__init__()
+
+        self.user_name = user_name
+
+        # Банковские карты хранятся в памяти приложения.
+        self.bank_cards: list[dict[str, object]] = [
+            {"bank": "СберБанк", "number": "0000 0000 0000 0000", "expiry": "00/00", "main": True},
+            {"bank": "ВТБ", "number": "0000 0000 0000 0000", "expiry": "00/00", "main": False},
+        ]
+
+        self.setWindowTitle("Мониторинг расходов ЖКХ")
+        self.resize(1440, 900)
+        self.setMinimumSize(1100, 700)
+
+        self._apply_style()
+
+        self.stack = QStackedWidget()
+
+        self.nav_buttons: list[QPushButton] = []
+
+        self._build_layout()
+        self._create_pages()
+        self.current_property_id = 1
+        self._load_meters()
+
+        self._set_active_navigation(0)
+
+    def _apply_style(self) -> None:
+        """Apply the global application stylesheet."""
+        self.setStyleSheet(
+            """
+            QMainWindow {
+                background: #f5f7fa;
+            }
+
+            QWidget {
+                font-family: Arial;
+                font-size: 14px;
+                color: #111827;
+            }
+
+            #sidebar {
+                background: #f9dddd;
+                border: none;
+            }
+
+            #userName {
+                font-size: 17px;
+                font-weight: 700;
+            }
+
+            #roleLabel {
+                color: #00b979;
+                font-weight: 700;
+            }
+
+            QPushButton#navButton {
+                background: transparent;
+                color: #111827;
+                border: none;
+                text-align: left;
+                padding: 13px 22px;
+                font-weight: 600;
+                border-radius: 5px;
+            }
+
+            QPushButton#navButton:hover {
+                background: #f0d5dc;
+            }
+
+            QPushButton#navButton[active="true"] {
+                background: #ead0d8;
+                color: #203f91;
+            }
+
+            #content {
+                background: #f5f7fa;
+            }
+
+            #topBar {
+                background: white;
+                border-bottom: 1px solid #eef0f4;
+            }
+
+            QLabel#pageTitle {
+                font-size: 21px;
+                font-weight: 700;
+            }
+
+            QLabel#cardTitle {
+                font-weight: 700;
+            }
+
+            QLabel#bigValue {
+                font-size: 28px;
+                font-weight: 700;
+            }
+
+            QLabel#redValue {
+                color: #ff4b4b;
+                font-size: 28px;
+                font-weight: 700;
+            }
+
+            QLabel#greenValue {
+                color: #00b979;
+                font-size: 18px;
+                font-weight: 700;
+            }
+
+            QFrame#card {
+                background: white;
+                border: none;
+                border-radius: 8px;
+            }
+
+            QFrame#whitePanel {
+                background: white;
+                border-radius: 8px;
+            }
+
+            QLineEdit,
+            QComboBox {
+                background: white;
+                border: 1px solid #d1d5db;
+                border-radius: 5px;
+                padding: 8px;
+            }
+
+            QPushButton#primaryButton {
+                background: #203f91;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 10px 18px;
+                font-weight: 700;
+            }
+
+            QPushButton#primaryButton:hover {
+                background: #172d68;
+            }
+
+            QPushButton#outlineButton {
+                background: white;
+                color: #111827;
+                border: 1px solid #111827;
+                border-radius: 6px;
+                padding: 8px 14px;
+            }
+
+            QPushButton#settingButton {
+                background: #dbe2f0;
+                border: none;
+                border-radius: 5px;
+                padding: 10px 14px;
+                text-align: left;
+                font-weight: 700;
+            }
+
+            QPushButton#settingButton:hover {
+                background: #cbd5e1;
+            }
+
+            QTableWidget {
+                background: white;
+                border: none;
+                gridline-color: #eeeeee;
+                font-size: 14px;
+            }
+
+            QHeaderView::section {
+                background: white;
+                border: none;
+                padding: 10px;
+                font-size: 15px;
+                font-weight: 700;
+            }
+
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+
+            QCheckBox {
+                spacing: 10px;
+                font-weight: 600;
+            }
+            """
+        )
+
+    def _build_layout(self) -> None:
+        """Build the main window layout."""
+        central = QWidget()
+        central_layout = QHBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+
+        sidebar = self._create_sidebar()
+        central_layout.addWidget(sidebar)
+
+        content = QWidget()
+        content.setObjectName("content")
+
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+
+        top_bar = self._create_top_bar()
+        content_layout.addWidget(top_bar)
+
+        content_layout.addWidget(self.stack, 1)
+
+        central_layout.addWidget(content, 1)
+
+        self.setCentralWidget(central)
+
+    def _create_sidebar(self) -> QWidget:
+        """Create the pink navigation sidebar."""
+        sidebar = QWidget()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(196)
+
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(0, 28, 0, 0)
+        layout.setSpacing(4)
+
+        user_label = QLabel(self.user_name)
+        user_label.setObjectName("userName")
+        user_label.setContentsMargins(24, 0, 8, 0)
+
+        role_label = QLabel("Роль: Владелец")
+        role_label.setObjectName("roleLabel")
+        role_label.setContentsMargins(24, 8, 8, 18)
+
+        layout.addWidget(user_label)
+        layout.addWidget(role_label)
+
+        navigation = [
+            ("Главное меню", 0),
+            ("Приборы учета", 1),
+            ("Аналитика и прогнозы", 2),
+            ("Отчеты и экспорт", 3),
+            ("Настройки", 4),
+        ]
+
+        for title, index in navigation:
+            button = QPushButton(title)
+            button.setObjectName("navButton")
+            button.setProperty("active", False)
+            button.clicked.connect(
+                lambda checked=False, value=index: self._navigate(value)
+            )
+
+            self.nav_buttons.append(button)
+            layout.addWidget(button)
+
+        layout.addStretch()
+
+        return sidebar
+
+    
+def _create_top_bar(self) -> QWidget:
+    """Create the address selector and reading button."""
+    top_bar = QWidget()
+    top_bar.setObjectName("topBar")
+    top_bar.setFixedHeight(64)
+
+    layout = QHBoxLayout(top_bar)
+    layout.setContentsMargins(26, 0, 26, 0)
+    layout.setSpacing(12)
+
+    self.address_combo = QComboBox()
+    self.address_combo.setFixedWidth(420)
+
+    try:
+        for prop in list_properties():
+            self.address_combo.addItem(
+                prop["address"],
+                int(prop["id"]),
+            )
+    except Exception as error:
+        QMessageBox.warning(
+            self,
+            "Ошибка загрузки адресов",
+            str(error),
+        )
+
+    self.address_combo.currentIndexChanged.connect(
+        self._on_property_changed
+    )
+
+    layout.addWidget(self.address_combo)
+    layout.addStretch()
+
+    reading_button = QPushButton("+ Внести показания")
+    reading_button.setObjectName("primaryButton")
+    reading_button.clicked.connect(self._open_reading_dialog)
+    layout.addWidget(reading_button)
+
+    return top_bar
+
+
+def _on_property_changed(self, index: int) -> None:
+    """Update meters and readings after selecting another address."""
+    property_id = self.address_combo.itemData(index)
+
+    if property_id is None:
+        self.current_property_id = None
+        return
+
+    self.current_property_id = int(property_id)
+    self._load_meters()
+
+
+def _reload_property_selector(
+    self,
+    selected_property_id: int | None = None,
+) -> None:
+    """Reload addresses after adding a new property."""
+    properties = list_properties()
+
+    self.address_combo.blockSignals(True)
+    self.address_combo.clear()
+
+    for prop in properties:
+        self.address_combo.addItem(
+            prop["address"],
+            int(prop["id"]),
+        )
+
+    if selected_property_id is not None:
+        index = self.address_combo.findData(selected_property_id)
+    else:
+        index = 0 if properties else -1
+
+    if index >= 0:
+        self.address_combo.setCurrentIndex(index)
+
+    self.address_combo.blockSignals(False)
+
+    current_id = self.address_combo.currentData()
+    self.current_property_id = (
+        int(current_id) if current_id is not None else None
+    )
+
+    # Не обращаемся к таблицам интерфейса, пока страницы не созданы.
+    if (
+        self.current_property_id is not None
+        and hasattr(self, "meter_cards_layout")
+        and hasattr(self, "history_table")
+    ):
+        self._load_meters()
+
+    def _create_pages(self) -> None:
+        """Create all main application pages."""
+        self.stack.addWidget(self._dashboard_page())
+        self.stack.addWidget(self._meters_page())
+        self.stack.addWidget(self._analytics_page())
+        self.stack.addWidget(self._reports_page())
+        self.stack.addWidget(self._settings_page())
+
+    def _create_top_bar(self) -> QWidget:
+        """Create the apartment selector and reading button."""
+        top_bar = QWidget()
+        top_bar.setObjectName("topBar")
+        top_bar.setFixedHeight(64)
+
+        layout = QHBoxLayout(top_bar)
+        layout.setContentsMargins(26, 0, 26, 0)
+
+        apartment = QComboBox()
+        apartment.setFixedWidth(340)
+        apartment.addItem(
+            "Квартира: г. Новосибирск, ул. Ленина 14"
+        )
+        apartment.addItem(
+            "Квартира: г. Новосибирск, ул. Ленина 15"
+        )
+
+        layout.addWidget(apartment)
+        layout.addStretch()
+
+        reading_button = QPushButton("+ Внести показания")
+        reading_button.setObjectName("primaryButton")
+        reading_button.clicked.connect(self._open_reading_dialog)
+
+        layout.addWidget(reading_button)
+
+        return top_bar
+
+    def _navigate(self, index: int) -> None:
+        """Navigate to an application page."""
+        self.stack.setCurrentIndex(index)
+        self._set_active_navigation(index)
+
+        if index == 1:
+            self._load_meters()
+
+    def _set_active_navigation(self, index: int) -> None:
+        """Highlight the active navigation button."""
+        for button_index, button in enumerate(self.nav_buttons):
+            button.setProperty(
+                "active",
+                button_index == index,
+            )
+            button.style().unpolish(button)
+            button.style().polish(button)
+
+    def _dashboard_page(self) -> QWidget:
+        """Create the dashboard page."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 0, 24, 24)
+        layout.setSpacing(10)
+
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(16)
+
+        cards_layout.addWidget(
+            self._stat_card(
+                "К оплате за сентябрь",
+                "4 800,50₽",
+                "red",
+            )
+        )
+
+        cards_layout.addWidget(
+            self._stat_card(
+                "Месячный бюджет ЖКХ",
+                "5 500₽",
+                "normal",
+            )
+        )
+
+        cards_layout.addWidget(
+            self._stat_card(
+                "Технический контроль",
+                "Счетчики проверены",
+                "green",
+            )
+        )
+
+        layout.addLayout(cards_layout)
+
+        chart_panel = QFrame()
+        chart_panel.setObjectName("whitePanel")
+
+        chart_layout = QVBoxLayout(chart_panel)
+        chart_layout.setContentsMargins(26, 26, 26, 20)
+
+        chart_title = QLabel(
+            "Динамика потребления ресурсов "
+            "(май - сентябрь 2026)"
+        )
+        chart_title.setStyleSheet(
+            "font-size: 17px; font-weight: 700;"
+        )
+
+        chart_layout.addWidget(chart_title)
+
+        chart = ResourceBars()
+        chart_layout.addWidget(chart)
+
+        legend = QHBoxLayout()
+
+        legend.addStretch()
+
+        for text, color in [
+            ("Газ", "#8392aa"),
+            ("Электро", "#ffc400"),
+            ("Вода", "#29458f"),
+        ]:
+            button = QLabel(text)
+            button.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            button.setFixedSize(66, 40)
+            button.setStyleSheet(
+                f"""
+                background: {color};
+                color: white;
+                border-radius: 20px;
+                font-weight: 700;
+                """
+            )
+            legend.addWidget(button)
+
+        legend.addStretch()
+
+        chart_layout.addLayout(legend)
+
+        layout.addWidget(chart_panel, 1)
+
+        return page
+
+    def _stat_card(
+        self,
+        title: str,
+        value: str,
+        value_type: str,
+    ) -> QFrame:
+        """Create a dashboard statistic card."""
+        card = QFrame()
+        card.setObjectName("card")
+        card.setMinimumHeight(96)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        title_label = QLabel(title)
+        title_label.setObjectName("cardTitle")
+
+        value_label = QLabel(value)
+
+        if value_type == "red":
+            value_label.setObjectName("redValue")
+        elif value_type == "green":
+            value_label.setObjectName("greenValue")
+        else:
+            value_label.setObjectName("bigValue")
+
+        layout.addWidget(title_label)
+        layout.addWidget(value_label)
+
+        return card
+
+    def _meters_page(self) -> QWidget:
+        """Create the meters and history page."""
+        page = QWidget()
+
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(8, 0, 24, 20)
+
+        meters_panel = QFrame()
+        meters_panel.setObjectName("whitePanel")
+
+        meters_layout = QVBoxLayout(meters_panel)
+        meters_layout.setContentsMargins(20, 18, 20, 18)
+
+        cards_layout = QHBoxLayout()
+
+        self.meter_cards_layout = cards_layout
+
+        meters_layout.addLayout(cards_layout)
+        add_meter_button = QPushButton("+ Добавить прибор учета")
+        add_meter_button.setObjectName("primaryButton")
+        add_meter_button.clicked.connect(self._open_meter_dialog)
+        meters_layout.addWidget(add_meter_button)
+
+        outer.addWidget(meters_panel)
+
+        history_panel = QFrame()
+        history_panel.setObjectName("whitePanel")
+
+        history_layout = QVBoxLayout(history_panel)
+        history_layout.setContentsMargins(20, 20, 20, 10)
+
+        title = QLabel("История показаний и расчетов")
+        title.setStyleSheet(
+            "font-size: 17px; font-weight: 700;"
+        )
+
+        history_layout.addWidget(title)
+
+        self.history_table = QTableWidget()
+        self.history_table.setColumnCount(6)
+        self.history_table.setHorizontalHeaderLabels(
+            [
+                "Дата внесения",
+                "Прибор учета",
+                "Показания",
+                "Расход",
+                "Сумма",
+                "Статус",
+            ]
+        )
+
+        self.history_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.history_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+
+        history_layout.addWidget(self.history_table)
+
+        pagination = QLabel("←      Страница 1 из 12      →")
+        pagination.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pagination.setStyleSheet(
+            "padding: 16px; color: #111827;"
+        )
+
+        history_layout.addWidget(pagination)
+
+        outer.addWidget(history_panel, 1)
+
+        return page
+
+    def _meter_card(
+        self,
+        resource: str,
+        serial: str,
+        verification: str,
+    ) -> QFrame:
+        """Create a meter summary card."""
+        card = QFrame()
+        card.setObjectName("card")
+        card.setMinimumHeight(90)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(8, 8, 8, 8)
+
+        resource_label = QLabel(resource)
+        resource_label.setStyleSheet(
+            "font-size: 15px; font-weight: 700;"
+        )
+
+        serial_label = QLabel(f"СН: {serial}")
+        serial_label.setStyleSheet(
+            "color: #61718f; font-weight: 600;"
+        )
+
+        verification_label = QLabel(
+            f"Поверка: {verification or 'не указана'}"
+        )
+        verification_label.setStyleSheet(
+            "color: #00b979; font-weight: 700;"
+        )
+
+        layout.addWidget(resource_label)
+        layout.addWidget(serial_label)
+        layout.addWidget(verification_label)
+
+        return card
+
+
+    
+def _open_meter_dialog(self) -> None:
+    """Add a meter to the currently selected property."""
+    if self.current_property_id is None:
+        QMessageBox.warning(
+            self,
+            "Нет адреса",
+            "Сначала добавьте или выберите адрес.",
+        )
+        return
+
+    dialog = QDialog(self)
+    dialog.setWindowTitle("Добавить прибор учета")
+    dialog.resize(420, 300)
+
+    layout = QVBoxLayout(dialog)
+    form = QFormLayout()
+
+    meter_type = QComboBox()
+    meter_type.addItems([
+        "Холодная вода",
+        "Горячая вода",
+        "Электричество",
+        "Газ",
+    ])
+
+    serial_input = QLineEdit()
+    serial_input.setPlaceholderText("Серийный номер")
+
+    verification_input = QLineEdit()
+    verification_input.setPlaceholderText("ГГГГ-ММ-ДД")
+
+    form.addRow("Тип прибора:", meter_type)
+    form.addRow("Серийный номер:", serial_input)
+    form.addRow("Дата поверки:", verification_input)
+    layout.addLayout(form)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.StandardButton.Save
+        | QDialogButtonBox.StandardButton.Cancel
+    )
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+
+    def save_meter() -> None:
+        try:
+            create_meter(
+                meter_type.currentText(),
+                serial_input.text(),
+                verification_input.text(),
+                self.current_property_id,
+            )
+
+            dialog.accept()
+            self._load_meters()
+
+            QMessageBox.information(
+                self,
+                "Готово",
+                "Прибор учета сохранён для выбранного адреса.",
+            )
+        except Exception as error:
+            QMessageBox.warning(
+                dialog,
+                "Ошибка",
+                str(error),
+            )
+
+    buttons.accepted.connect(save_meter)
+    dialog.exec()
+
+    def _load_meters(self) -> None:
+        """Refresh meter cards and reading history."""
+        meters = list_meters(
+            self.current_property_id
+        )
+
+        while self.meter_cards_layout.count():
+            item = self.meter_cards_layout.takeAt(0)
+
+            if item.widget():
+                item.widget().deleteLater()
+
+        resource_names = {
+            "Холодная вода": "Холодное водоснабжение(ХВС)",
+            "Горячая вода": "Горячее водоснабжение (ГВС)",
+            "Электроэнергия": "Электроэнергия",
+            "Газ": "Газ",
+        }
+
+        if not meters:
+           
+            resource_names = {
+                "Холодная вода": "Холодное водоснабжение (ХВС)",
+                "Горячая вода": "Горячее водоснабжение (ГВС)",
+                "Электричество": "Электроэнергия",
+                "Электроэнергия": "Электроэнергия",
+                "Газ": "Газ",
+}
+
+            if not meters:
+                empty_label = QLabel(
+                    "Для выбранного адреса пока нет приборов учета."
+                )
+                empty_label.setStyleSheet(
+                    "color: #6b7280; padding: 20px; font-weight: 600;"
+                )
+                self.meter_cards_layout.addWidget(empty_label)
+            else:
+                for meter in meters:
+                    resource = resource_names.get(
+                        meter["meter_type"],
+                        meter["meter_type"],
+                    )
+
+                    self.meter_cards_layout.addWidget(
+                        self._meter_card(
+                            resource,
+                            meter["serial_number"],
+                            meter["verification_date"] or "",
+                        )
+                    )
+
+            self.meter_cards_layout.addStretch()
+            self._load_history()
+
+    def _load_history(self) -> None:
+        """Load meter history into the table."""
+        readings = list_readings(
+            self.current_property_id
+        )
+
+        self.history_table.setRowCount(0)
+
+        for reading in readings:
+            row = self.history_table.rowCount()
+            self.history_table.insertRow(row)
+
+            resource = reading["meter_type"]
+            value = reading["reading_value"]
+            previous = reading["previous_value"]
+            consumption = reading["consumption"]
+
+            amount = (
+                float(consumption or 0) * 4.20
+            )
+
+            status = "Оплачено" if row % 2 else "Долг"
+
+            values = [
+                str(reading["reading_date"])[:10],
+                resource,
+                f"{value:g}",
+                f"{consumption or 0:g}",
+                f"{amount:.2f} ₽",
+                status,
+            ]
+
+            for column, value_text in enumerate(values):
+                item = QTableWidgetItem(value_text)
+
+                if column == 5:
+                    if status == "Оплачено":
+                        item.setForeground(
+                            QColor("#00a86b")
+                        )
+                    else:
+                        item.setForeground(
+                            QColor("#ff4b4b")
+                        )
+
+                self.history_table.setItem(
+                    row,
+                    column,
+                    item,
+                )
+
+        self.history_table.resizeColumnsToContents()
+
+    def _analytics_page(self) -> QWidget:
+        """Create the analytics and forecasts page."""
+        page = QWidget()
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 0, 24, 20)
+        layout.setSpacing(16)
+
+        title = QLabel("Аналитика и прогнозы")
+        title.setObjectName("pageTitle")
+
+        layout.addWidget(title)
+
+        # =====================================================
+        # РАСПРЕДЕЛЕНИЕ ЗАТРАТ
+        # =====================================================
+
+        distribution_panel = QFrame()
+        distribution_panel.setObjectName("whitePanel")
+
+        distribution_layout = QVBoxLayout(
+            distribution_panel
+        )
+        distribution_layout.setContentsMargins(
+            24,
+            20,
+            24,
+            20,
+        )
+        distribution_layout.setSpacing(18)
+
+        distribution_title = QLabel(
+            "Распределение затрат за текущий месяц"
+        )
+
+        distribution_title.setStyleSheet(
+            "font-size: 18px; font-weight: 700;"
+        )
+
+        distribution_layout.addWidget(
+            distribution_title
+        )
+
+        distribution_content = QHBoxLayout()
+        distribution_content.setSpacing(30)
+
+        # Круговая диаграмма
+
+        donut = DonutChart()
+
+        donut.setMinimumSize(
+            380,
+            300,
+        )
+
+        distribution_content.addWidget(
+            donut,
+            1,
+        )
+
+        # Легенда
+
+        legend = QVBoxLayout()
+        legend.setSpacing(18)
+
+        legend.addStretch()
+
+        legend_items = [
+            (
+                "Газ",
+                "720 ₽",
+                "20%",
+                "#718096",
+            ),
+            (
+                "Вода",
+                "960 ₽",
+                "25%",
+                "#2955d9",
+            ),
+            (
+                "Электроэнергия",
+                "1 200 ₽",
+                "55%",
+                "#ffc400",
+            ),
+        ]
+
+        for name, amount, percent, color in legend_items:
+            row = QHBoxLayout()
+            row.setSpacing(10)
+
+            color_label = QLabel()
+            color_label.setFixedSize(
+                22,
+                22,
+            )
+
+            color_label.setStyleSheet(
+                f"""
+                background: {color};
+                border-radius: 11px;
+                """
+            )
+
+            resource_label = QLabel(
+                f"{name} — {amount}"
+            )
+
+            resource_label.setStyleSheet(
+                """
+                font-size: 15px;
+                font-weight: 600;
+                """
+            )
+
+            percent_label = QLabel(
+                percent
+            )
+
+            percent_label.setStyleSheet(
+                """
+                color: #6b7280;
+                font-size: 14px;
+                font-weight: 700;
+                """
+            )
+
+            row.addWidget(
+                color_label
+            )
+
+            row.addWidget(
+                resource_label
+            )
+
+            row.addStretch()
+
+            row.addWidget(
+                percent_label
+            )
+
+            legend.addLayout(row)
+
+        legend.addStretch()
+
+        distribution_content.addLayout(
+            legend,
+            1,
+        )
+
+        distribution_layout.addLayout(
+            distribution_content
+        )
+
+        layout.addWidget(
+            distribution_panel,
+            1,
+        )
+
+        # =====================================================
+        # ПРОГНОЗ ПОТРЕБЛЕНИЯ
+        # =====================================================
+
+        forecast_panel = QFrame()
+        forecast_panel.setObjectName(
+            "whitePanel"
+        )
+
+        forecast_layout = QVBoxLayout(
+            forecast_panel
+        )
+
+        forecast_layout.setContentsMargins(
+            24,
+            20,
+            24,
+            20,
+        )
+
+        forecast_layout.setSpacing(14)
+
+        forecast_title = QLabel(
+            "Прогноз потребления ресурсов"
+        )
+
+        forecast_title.setStyleSheet(
+            """
+            font-size: 18px;
+            font-weight: 700;
+            """
+        )
+
+        forecast_layout.addWidget(
+            forecast_title
+        )
+
+        forecast_text = QLabel(
+            "По текущей динамике потребления "
+            "ожидается увеличение расходов "
+            "на электроэнергию в следующем месяце "
+            "примерно на 8%."
+        )
+
+        forecast_text.setWordWrap(True)
+
+        forecast_text.setStyleSheet(
+            """
+            color: #6b7280;
+            font-size: 14px;
+            """
+        )
+
+        forecast_layout.addWidget(
+            forecast_text
+        )
+
+        # График динамики
+
+        forecast_chart = ResourceBars()
+
+        forecast_chart.setMinimumHeight(
+            250
+        )
+
+        forecast_layout.addWidget(
+            forecast_chart
+        )
+
+        # =====================================================
+        # АНОМАЛИЯ
+        # =====================================================
+
+        anomaly = QFrame()
+
+        anomaly.setStyleSheet(
+            """
+            QFrame {
+                background: #fff0f0;
+                border-radius: 6px;
+            }
+            """
+        )
+
+        anomaly_layout = QVBoxLayout(
+            anomaly
+        )
+
+        anomaly_layout.setContentsMargins(
+            16,
+            12,
+            16,
+            12,
+        )
+
+        anomaly_title = QLabel(
+            "⚠  Обнаружена аномалия в потреблении!"
+        )
+
+        anomaly_title.setStyleSheet(
+            """
+            color: #ff4b4b;
+            font-weight: 700;
+            font-size: 15px;
+            """
+        )
+
+        anomaly_text = QLabel(
+            "Расход по прибору ХВС превышает "
+            "среднюю норму на 28%. "
+            "Рекомендуем проверить трубы "
+            "на наличие скрытых утечек."
+        )
+
+        anomaly_text.setWordWrap(True)
+
+        anomaly_text.setStyleSheet(
+            """
+            color: #374151;
+            font-size: 14px;
+            """
+        )
+
+        anomaly_layout.addWidget(
+            anomaly_title
+        )
+
+        anomaly_layout.addWidget(
+            anomaly_text
+        )
+
+        forecast_layout.addWidget(
+            anomaly
+        )
+
+        layout.addWidget(
+            forecast_panel,
+            1,
+        )
+
+        return page
+
+    def _reports_page(self) -> QWidget:
+        """Create the reports and export page."""
+        page = QWidget()
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(
+            8,
+            0,
+            24,
+            20,
+        )
+
+        panel = QFrame()
+        panel.setObjectName(
+            "whitePanel"
+        )
+
+        grid = QGridLayout(panel)
+
+        grid.setContentsMargins(
+            20,
+            20,
+            20,
+            40,
+        )
+
+        grid.setHorizontalSpacing(
+            70
+        )
+
+        grid.setVerticalSpacing(
+            16
+        )
+
+        # =====================================================
+        # ЗАГОЛОВОК
+        # =====================================================
+
+        title = QLabel(
+            "Формирование нового отчета"
+        )
+
+        title.setStyleSheet(
+            """
+            font-size: 18px;
+            font-weight: 700;
+            """
+        )
+
+        grid.addWidget(
+            title,
+            0,
+            0,
+        )
+
+        # =====================================================
+        # ПЕРИОД И ОБЪЕКТ
+        # =====================================================
+
+        period_label = QLabel(
+            "Период:"
+        )
+
+        period = QComboBox()
+
+        period.addItems(
+            [
+                "Сентябрь 2026",
+                "Август 2026",
+                "Июль 2026",
+            ]
+        )
+
+        property_label = QLabel(
+            "Объект недвижимости:"
+        )
+
+        property_box = QComboBox()
+
+        property_box.addItem(
+            "г. Новосибирск, ул. Ленина, д. 10"
+        )
+
+        form = QFormLayout()
+
+        form.addRow(
+            period_label,
+            period,
+        )
+
+        form.addRow(
+            property_label,
+            property_box,
+        )
+
+        grid.addLayout(
+            form,
+            1,
+            0,
+        )
+
+        # =====================================================
+        # РЕСУРСЫ
+        # =====================================================
+
+        resources_title = QLabel(
+            "Выбрать ресурсы для отчета:"
+        )
+
+        resources_title.setStyleSheet(
+            "font-weight: 700;"
+        )
+
+        resources_layout = QVBoxLayout()
+
+        resources_layout.addWidget(
+            resources_title
+        )
+
+        for name in [
+            "Вода",
+            "Электричество",
+            "Газ",
+        ]:
+            checkbox = QCheckBox(
+                name
+            )
+
+            checkbox.setChecked(
+                True
+            )
+
+            resources_layout.addWidget(
+                checkbox
+            )
+
+        grid.addLayout(
+            resources_layout,
+            0,
+            1,
+            3,
+            1,
+        )
+
+        # =====================================================
+        # ФОРМАТЫ
+        # =====================================================
+
+        downloads_title = QLabel(
+            "Доступные форматы для скачивания"
+        )
+
+        downloads_title.setStyleSheet(
+            """
+            font-size: 17px;
+            font-weight: 700;
+            """
+        )
+
+        grid.addWidget(
+            downloads_title,
+            0,
+            2,
+        )
+
+        pdf_button = QPushButton(
+            "Скачать квитанцию за период (.pdf)     PDF"
+        )
+
+        pdf_button.setObjectName(
+            "outlineButton"
+        )
+
+        pdf_button.clicked.connect(
+            lambda: QMessageBox.information(
+                self,
+                "PDF",
+                "Формирование PDF будет подключено "
+                "к генератору отчётов.",
+            )
+        )
+
+        excel_button = QPushButton(
+            "Экспортировать журнал начислений (.xlsx)     XLSX"
+        )
+
+        excel_button.setObjectName(
+            "outlineButton"
+        )
+
+        excel_button.clicked.connect(
+            lambda: QMessageBox.information(
+                self,
+                "Excel",
+                "Экспорт XLSX будет подключён "
+                "к данным SQLite.",
+            )
+        )
+
+        downloads = QVBoxLayout()
+
+        downloads.addWidget(
+            pdf_button
+        )
+
+        downloads.addWidget(
+            excel_button
+        )
+
+        grid.addLayout(
+            downloads,
+            1,
+            2,
+        )
+
+        # =====================================================
+        # КНОПКА ФОРМИРОВАНИЯ
+        # =====================================================
+
+        summary_button = QPushButton(
+            "Сформировать сводку"
+        )
+
+        summary_button.setObjectName(
+            "primaryButton"
+        )
+
+        summary_button.setFixedWidth(
+            235
+        )
+
+        summary_button.clicked.connect(
+            lambda: QMessageBox.information(
+                self,
+                "Отчёт",
+                "Сводка сформирована.",
+            )
+        )
+
+        grid.addWidget(
+            summary_button,
+            3,
+            0,
+            1,
+            2,
+            Qt.AlignmentFlag.AlignCenter,
+        )
+
+        layout.addWidget(
+            panel
+        )
+
+        layout.addStretch()
+
+        return page
+
+    def _reports_page(self) -> QWidget:
+        """Create the reports and export page."""
+        page = QWidget()
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 0, 24, 20)
+
+        panel = QFrame()
+        panel.setObjectName("whitePanel")
+
+        grid = QGridLayout(panel)
+        grid.setContentsMargins(20, 20, 20, 40)
+        grid.setHorizontalSpacing(70)
+        grid.setVerticalSpacing(16)
+
+        title = QLabel("Формирование нового отчета")
+        title.setStyleSheet(
+            "font-size: 18px; font-weight: 700;"
+        )
+
+        grid.addWidget(title, 0, 0)
+
+        period_label = QLabel("Период:")
+        period = QComboBox()
+        period.addItems(
+            [
+                "Сентябрь 2026",
+                "Август 2026",
+                "Июль 2026",
+            ]
+        )
+
+        property_label = QLabel(
+            "Объект недвижимости:"
+        )
+        property_box = QComboBox()
+        property_box.addItem(
+            "Г.Новосибирск, ул. Ленина 12"
+        )
+
+        form = QFormLayout()
+        form.addRow(period_label, period)
+        form.addRow(property_label, property_box)
+
+        grid.addLayout(form, 1, 0)
+
+        resources_title = QLabel(
+            "Выбрать ресурсы для отчета:"
+        )
+        resources_title.setStyleSheet(
+            "font-weight: 700;"
+        )
+
+        resources_layout = QVBoxLayout()
+        resources_layout.addWidget(resources_title)
+
+        for name in [
+            "Вода",
+            "Электричество",
+            "Газ",
+        ]:
+            checkbox = QCheckBox(name)
+            checkbox.setChecked(True)
+            resources_layout.addWidget(checkbox)
+
+        grid.addLayout(resources_layout, 0, 1, 3, 1)
+
+        downloads_title = QLabel(
+            "Доступные форматы для скачивания"
+        )
+        downloads_title.setStyleSheet(
+            "font-size: 17px; font-weight: 700;"
+        )
+
+        grid.addWidget(downloads_title, 0, 2)
+
+        pdf_button = QPushButton(
+            "Скачать квитанцию за период (.pdf)     PDF"
+        )
+        pdf_button.setObjectName("outlineButton")
+        pdf_button.clicked.connect(
+            lambda: QMessageBox.information(
+                self,
+                "PDF",
+                "Формирование PDF будет подключено "
+                "к генератору отчётов.",
+            )
+        )
+
+        excel_button = QPushButton(
+            "Экспортировать журнал начислений (.xlsx)     XLSX"
+        )
+        excel_button.setObjectName("outlineButton")
+        excel_button.clicked.connect(
+            lambda: QMessageBox.information(
+                self,
+                "Excel",
+                "Экспорт XLSX будет подключён "
+                "к данным SQLite.",
+            )
+        )
+
+        downloads = QVBoxLayout()
+        downloads.addWidget(pdf_button)
+        downloads.addWidget(excel_button)
+
+        grid.addLayout(downloads, 1, 2)
+
+        summary_button = QPushButton(
+            "Сформировать сводку"
+        )
+        summary_button.setObjectName("primaryButton")
+        summary_button.setFixedWidth(235)
+        summary_button.clicked.connect(
+            lambda: QMessageBox.information(
+                self,
+                "Отчёт",
+                "Сводка сформирована.",
+            )
+        )
+
+        grid.addWidget(
+            summary_button,
+            3,
+            0,
+            1,
+            2,
+            Qt.AlignmentFlag.AlignCenter,
+        )
+
+        layout.addWidget(panel)
+        layout.addStretch()
+
+        return page
+
+    def _settings_page(self) -> QWidget:
+        """Create the settings page with functional sections."""
+        page = QWidget()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(8, 0, 24, 30)
+        layout.setSpacing(12)
+
+        title = QLabel("Настройки")
+        title.setObjectName("pageTitle")
+        layout.addWidget(title)
+
+        subtitle = QLabel(
+            "Профиль, безопасность, жильё, уведомления и банковские карты"
+        )
+        subtitle.setStyleSheet("color: #6b7280;")
+        layout.addWidget(subtitle)
+
+        settings = [
+            ("👤", "Профиль и аккаунт", "Изменение имени, телефона и email",
+             self._profile_dialog),
+            ("🛡", "Безопасность", "Пароль, 2FA и подключённые устройства",
+             self._security_dialog),
+            ("🏠", "Выбор жилья", "Адреса объектов недвижимости и основной объект",
+             self._property_dialog),
+            ("🔔", "Настройка уведомлений", "Каналы и типы уведомлений",
+             self._notification_dialog),
+            ("💳", "Банковские карты", "Добавление, просмотр и удаление карт",
+             self._bank_cards_dialog),
+        ]
+
+        for icon, title_text, description, callback in settings:
+            card = QFrame()
+            card.setObjectName("whitePanel")
+            card_layout = QHBoxLayout(card)
+            card_layout.setContentsMargins(18, 14, 18, 14)
+            card_layout.setSpacing(16)
+
+            icon_label = QLabel(icon)
+            icon_label.setFixedWidth(34)
+            icon_label.setStyleSheet("font-size: 24px;")
+
+            text_layout = QVBoxLayout()
+            text_layout.setSpacing(3)
+            name_label = QLabel(title_text)
+            name_label.setStyleSheet(
+                "font-size: 16px; font-weight: 700;"
+            )
+            desc_label = QLabel(description)
+            desc_label.setStyleSheet("color: #6b7280;")
+            text_layout.addWidget(name_label)
+            text_layout.addWidget(desc_label)
+
+            button = QPushButton("Открыть")
+            button.setObjectName("primaryButton")
+            button.setFixedWidth(110)
+            button.clicked.connect(callback)
+
+            card_layout.addWidget(icon_label)
+            card_layout.addLayout(text_layout, 1)
+            card_layout.addWidget(button)
+            layout.addWidget(card)
+
+        layout.addStretch()
+        scroll.setWidget(container)
+
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.addWidget(scroll)
+        return page
+
+    def _open_settings_form(
+        self,
+        title: str,
+        fields: list[tuple[str, str]],
+    ) -> None:
+        """Open a reusable settings dialog."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(500, 320)
+
+        layout = QVBoxLayout(dialog)
+        form = QFormLayout()
+        inputs: list[QLineEdit] = []
+
+        for label, value in fields:
+            field = QLineEdit(value)
+            form.addRow(label, field)
+            inputs.append(field)
+
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
+
+    def _profile_dialog(self) -> None:
+        """Open functional profile settings."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Профиль и аккаунт")
+        dialog.resize(520, 330)
+
+        layout = QVBoxLayout(dialog)
+        title = QLabel("👤   Профиль и аккаунт")
+        title.setStyleSheet("font-size: 18px; font-weight: 700;")
+        layout.addWidget(title)
+
+        form = QFormLayout()
+        name = QLineEdit(self.user_name)
+        phone = QLineEdit("+7 952 238 07 42")
+        email = QLineEdit("Kakaka.guz@mail.ru")
+        role = QComboBox()
+        role.addItems(["Владелец объектов недвижимости", "Пользователь"])
+        form.addRow("ФИО пользователя:", name)
+        form.addRow("Телефон:", phone)
+        form.addRow("Email:", email)
+        form.addRow("Текущая роль:", role)
+        layout.addLayout(form)
+
+        save = QPushButton("Сохранить изменения")
+        save.setObjectName("primaryButton")
+
+        def save_profile() -> None:
+            self.user_name = name.text().strip() or self.user_name
+            save.setText("Изменения сохранены ✓")
+            QTimer.singleShot(1800, lambda: save.setText("Сохранить изменения"))
+
+        save.clicked.connect(save_profile)
+        layout.addWidget(save)
+        layout.addStretch()
+        dialog.exec()
+
+    def _security_dialog(self) -> None:
+        """Open security settings matching the mockup."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Безопасность")
+        dialog.resize(560, 520)
+
+        layout = QVBoxLayout(dialog)
+
+        title = QLabel("🛡   Безопасность")
+        title.setStyleSheet("font-size: 18px; font-weight: 700;")
+        layout.addWidget(title)
+
+        password_title = QLabel("Смена пароля")
+        password_title.setStyleSheet("font-size: 15px; font-weight: 700;")
+        layout.addWidget(password_title)
+
+        form = QFormLayout()
+        old_password = QLineEdit()
+        old_password.setEchoMode(QLineEdit.EchoMode.Password)
+        new_password = QLineEdit()
+        new_password.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("Старый пароль:", old_password)
+        form.addRow("Новый пароль:", new_password)
+        layout.addLayout(form)
+
+        change_button = QPushButton("Сменить пароль")
+        change_button.setObjectName("primaryButton")
+        layout.addWidget(change_button)
+
+        status = QLabel()
+        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status.setStyleSheet(
+            "background: #00b979; color: white; border-radius: 4px; "
+            "padding: 8px;"
+        )
+        status.hide()
+        layout.addWidget(status)
+
+        def change_password() -> None:
+            if not old_password.text() or not new_password.text():
+                QMessageBox.warning(
+                    dialog, "Ошибка",
+                    "Заполните старый и новый пароль."
+                )
+                return
+            status.setText("Пароль успешно изменён ✓")
+            status.show()
+            old_password.clear()
+            new_password.clear()
+            QTimer.singleShot(3000, status.hide)
+
+        change_button.clicked.connect(change_password)
+
+        two_fa = QCheckBox("Включить двухфакторную аутентификацию (2FA)")
+        two_fa.setChecked(True)
+        layout.addWidget(two_fa)
+
+        devices_title = QLabel("Список текущих подключенных устройств")
+        devices_title.setStyleSheet("font-weight: 700; padding-top: 8px;")
+        layout.addWidget(devices_title)
+
+        devices = QListWidget()
+        devices.addItem("Windows · Chrome\nМосква, Россия\nАктивен сейчас")
+        devices.addItem("iPhone · Safari\nМосква, Россия\nПоследняя активность: сегодня, 10:56")
+        layout.addWidget(devices)
+
+        terminate_all = QPushButton("Завершить все другие процессы")
+        terminate_all.setObjectName("primaryButton")
+
+        def terminate_devices() -> None:
+            if devices.count() > 1:
+                devices.takeItem(1)
+            terminate_all.setText("Все другие процессы завершены ✓")
+            QTimer.singleShot(
+                1800,
+                lambda: terminate_all.setText(
+                    "Завершить все другие процессы"
+                ),
+            )
+
+        terminate_all.clicked.connect(terminate_devices)
+        layout.addWidget(terminate_all)
+        dialog.exec()
+
+    
+def _property_dialog(self) -> None:
+    """Select an existing property or create a new one."""
+    dialog = QDialog(self)
+    dialog.setWindowTitle("Выбор жилья")
+    dialog.resize(600, 380)
+
+    layout = QVBoxLayout(dialog)
+
+    title = QLabel("🏠  Объекты недвижимости")
+    title.setStyleSheet("font-size: 18px; font-weight: 700;")
+    layout.addWidget(title)
+    layout.addWidget(QLabel("Выберите адрес или добавьте новый:"))
+
+    properties_widget = QListWidget()
+    layout.addWidget(properties_widget)
+
+    def refresh_list() -> None:
+        properties_widget.clear()
+
+        for prop in list_properties():
+            address = prop["address"]
+            property_id = int(prop["id"])
+
+            if property_id == self.current_property_id:
+                address += "  — текущий адрес"
+
+            item = QListWidgetItem(address)
+            item.setData(Qt.ItemDataRole.UserRole, property_id)
+            properties_widget.addItem(item)
+
+    def select_address() -> None:
+        item = properties_widget.currentItem()
+
+        if item is None:
+            QMessageBox.information(
+                dialog,
+                "Выбор адреса",
+                "Сначала выберите адрес из списка.",
+            )
+            return
+
+        property_id = int(item.data(Qt.ItemDataRole.UserRole))
+        index = self.address_combo.findData(property_id)
+
+        if index >= 0:
+            if index == self.address_combo.currentIndex():
+                # Адрес уже выбран, но обновим экран на всякий случай.
+                self.current_property_id = property_id
+                self._load_meters()
+            else:
+                self.address_combo.setCurrentIndex(index)
+
+        dialog.accept()
+
+    def add_address() -> None:
+        address, accepted = self._text_input(
+            dialog,
+            "Новый адрес",
+            "Введите полный адрес квартиры или дома:",
+        )
+
+        if not accepted or not address:
+            return
+
+        try:
+            new_property_id = create_property(address)
+
+            # Обновляем выпадающий список основного окна и выбираем новый адрес.
+            self._reload_property_selector(new_property_id)
+            refresh_list()
+
+            QMessageBox.information(
+                dialog,
+                "Адрес добавлен",
+                "Адрес сохранён в базе данных.\n"
+                "Теперь можно добавить для него счётчики.",
+            )
+
+        except Exception as error:
+            QMessageBox.warning(
+                dialog,
+                "Ошибка добавления адреса",
+                str(error),
+            )
+
+    buttons_layout = QHBoxLayout()
+
+    select_button = QPushButton("Выбрать адрес")
+    select_button.setObjectName("primaryButton")
+    select_button.clicked.connect(select_address)
+
+    add_button = QPushButton("+ Добавить новый адрес")
+    add_button.setObjectName("primaryButton")
+    add_button.clicked.connect(add_address)
+
+    buttons_layout.addWidget(select_button)
+    buttons_layout.addWidget(add_button)
+    layout.addLayout(buttons_layout)
+
+    refresh_list()
+    dialog.exec()
+
+    def add_property() -> None:
+        text, ok = self._text_input(
+            dialog, "Новый адрес", "Введите адрес:"
+        )
+        if ok and text:
+            properties.addItem(f"Адрес\n{text}\nВыбрать")
+
+    add_button.clicked.connect(add_property)
+    dialog.exec()
+
+    def _text_input(
+        self, parent: QWidget, title: str, label: str
+    ) -> tuple[str, bool]:
+        """Small text input dialog used by settings."""
+        dialog = QDialog(parent)
+        dialog.setWindowTitle(title)
+        dialog.resize(420, 160)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(label))
+        field = QLineEdit()
+        layout.addWidget(field)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        return field.text().strip(), accepted
+
+    def _notification_dialog(self) -> None:
+        """Open functional notification settings."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Настройка уведомлений")
+        dialog.resize(560, 430)
+
+        layout = QVBoxLayout(dialog)
+        title = QLabel("🔔   Настройка уведомлений")
+        title.setStyleSheet("font-size: 18px; font-weight: 700;")
+        layout.addWidget(title)
+        layout.addWidget(QLabel("Выберите какие уведомления хотите получать:"))
+
+        channels = QFrame()
+        channels.setObjectName("whitePanel")
+        channel_layout = QVBoxLayout(channels)
+        channel_layout.addWidget(QLabel("Способ получения уведомлений"))
+
+        channel_checks = []
+        for text, checked in [
+            ("Push — получать уведомления на устройство", True),
+            ("Email — получать уведомления на электронную почту", True),
+            ("SMS — получать важные уведомления по SMS", False),
+        ]:
+            check = QCheckBox(text)
+            check.setChecked(checked)
+            channel_checks.append(check)
+            channel_layout.addWidget(check)
+
+        layout.addWidget(channels)
+
+        types = QFrame()
+        types.setObjectName("whitePanel")
+        type_layout = QVBoxLayout(types)
+        type_layout.addWidget(QLabel("Типы уведомлений"))
+
+        for text, checked in [
+            ("Платежи — напоминания об оплате", True),
+            ("Показания приборов — напоминания о передаче показаний", True),
+            ("Задолженность — информация о задолженности", True),
+            ("Новости и предложения — информационные сообщения", False),
+        ]:
+            check = QCheckBox(text)
+            check.setChecked(checked)
+            type_layout.addWidget(check)
+
+        layout.addWidget(types)
+
+        save = QPushButton("Сохранить")
+        save.setObjectName("primaryButton")
+        save.clicked.connect(dialog.accept)
+        layout.addWidget(save)
+        dialog.exec()
+
+    def _bank_cards_dialog(self) -> None:
+        """Show and manage linked bank cards."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Банковские карты")
+        dialog.resize(780, 560)
+
+        root = QVBoxLayout(dialog)
+        title = QLabel("💳   Банковские карты")
+        title.setStyleSheet("font-size: 18px; font-weight: 700;")
+        root.addWidget(title)
+
+        cards_layout = QHBoxLayout()
+        cards_container = QWidget()
+        cards_box = QVBoxLayout(cards_container)
+        cards_box.setSpacing(12)
+        cards_layout.addWidget(cards_container, 1)
+
+        form_panel = QFrame()
+        form_panel.setStyleSheet(
+            "QFrame { background: #00b979; border-radius: 5px; }"
+            "QLabel { color: white; }"
+            "QLineEdit { background: white; }"
+        )
+        form = QVBoxLayout(form_panel)
+        form.addWidget(QLabel("Добавить банковскую карту"))
+
+        number = QLineEdit()
+        number.setPlaceholderText("0000 0000 0000 0000")
+        expiry = QLineEdit()
+        expiry.setPlaceholderText("00/00")
+        cvv = QLineEdit()
+        cvv.setPlaceholderText("000")
+        bank = QLineEdit()
+        bank.setPlaceholderText("Название банка")
+
+        form.addWidget(QLabel("Номер карты"))
+        form.addWidget(number)
+        form.addWidget(QLabel("Срок действия"))
+        form.addWidget(expiry)
+        form.addWidget(QLabel("CVV"))
+        form.addWidget(cvv)
+        form.addWidget(QLabel("Банк"))
+        form.addWidget(bank)
+
+        add_button = QPushButton("Добавить")
+        add_button.setObjectName("primaryButton")
+        form.addWidget(add_button)
+        form.addStretch()
+        cards_layout.addWidget(form_panel, 1)
+
+        root.addLayout(cards_layout)
+
+        def render_cards() -> None:
+            while cards_box.count():
+                item = cards_box.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+
+            if not self.bank_cards:
+                empty = QLabel("Банковских карт пока нет.")
+                empty.setStyleSheet("color: #6b7280; padding: 20px;")
+                cards_box.addWidget(empty)
+                return
+
+            for index, card in enumerate(self.bank_cards):
+                card_frame = QFrame()
+                card_frame.setStyleSheet(
+                    "QFrame { background: #147de2; color: white; "
+                    "border-radius: 6px; }"
+                    "QLabel { color: white; }"
+                )
+                card_layout = QVBoxLayout(card_frame)
+                top = QHBoxLayout()
+                bank_label = QLabel(str(card["bank"]))
+                bank_label.setStyleSheet(
+                    "font-size: 15px; font-weight: 700;"
+                )
+                main_label = QLabel("✓ Основная" if card["main"] else "")
+                top.addWidget(bank_label)
+                top.addStretch()
+                top.addWidget(main_label)
+                card_layout.addLayout(top)
+                card_layout.addWidget(QLabel(str(card["number"])))
+                card_layout.addWidget(QLabel(str(card["expiry"])))
+
+                delete = QPushButton("Удалить")
+                delete.setStyleSheet(
+                    "background: #ff4b4b; color: white; "
+                    "border-radius: 4px; padding: 7px 14px;"
+                )
+                delete.clicked.connect(
+                    lambda checked=False, i=index: self._delete_bank_card(
+                        i, dialog, render_cards
+                    )
+                )
+                card_layout.addWidget(
+                    delete, alignment=Qt.AlignmentFlag.AlignRight
+                )
+                cards_box.addWidget(card_frame)
+
+            cards_box.addStretch()
+
+        def add_card() -> None:
+            card_number = number.text().strip()
+            card_expiry = expiry.text().strip()
+            card_bank = bank.text().strip() or "Банк"
+
+            if not card_number or not card_expiry:
+                QMessageBox.warning(
+                    dialog, "Ошибка",
+                    "Введите номер карты и срок действия."
+                )
+                return
+
+            self.bank_cards.append(
+                {
+                    "bank": card_bank,
+                    "number": card_number,
+                    "expiry": card_expiry,
+                    "main": not bool(self.bank_cards),
+                }
+            )
+            number.clear()
+            expiry.clear()
+            cvv.clear()
+            bank.clear()
+            render_cards()
+
+        add_button.clicked.connect(add_card)
+        render_cards()
+        dialog.exec()
+
+    def _delete_bank_card(
+        self,
+        index: int,
+        dialog: QDialog,
+        refresh_callback,
+    ) -> None:
+        """Confirm and delete a bank card, then show a 5-second toast."""
+        if index < 0 or index >= len(self.bank_cards):
+            return
+
+        card = self.bank_cards[index]
+        confirm = QMessageBox(dialog)
+        confirm.setWindowTitle("Удалить банковскую карту?")
+        confirm.setText(
+            f'{card["bank"]}\n**** {str(card["number"])[-4:]}'
+        )
+        confirm.setInformativeText(
+            "После удаления карта больше не будет использоваться для оплаты."
+        )
+        cancel_button = confirm.addButton(
+            "Отмена", QMessageBox.ButtonRole.RejectRole
+        )
+        delete_button = confirm.addButton(
+            "Удалить", QMessageBox.ButtonRole.DestructiveRole
+        )
+        confirm.setDefaultButton(delete_button)
+        confirm.exec()
+
+        if confirm.clickedButton() is not delete_button:
+            return
+
+        was_main = bool(card["main"])
+        self.bank_cards.pop(index)
+
+        if was_main and self.bank_cards:
+            self.bank_cards[0]["main"] = True
+
+        refresh_callback()
+        self._show_toast("Банковская карта удалена")
+
+    def _show_toast(self, message: str) -> None:
+        """Show a temporary notification for exactly five seconds."""
+        toast = QLabel(message, self)
+        toast.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        toast.setStyleSheet(
+            "background: #dbe2f0; color: #111827; "
+            "border-radius: 6px; padding: 12px 22px; "
+            "font-weight: 700;"
+        )
+        toast.adjustSize()
+        x = max(20, self.width() - toast.width() - 40)
+        y = max(80, self.height() - toast.height() - 45)
+        toast.move(x, y)
+        toast.raise_()
+        toast.show()
+        QTimer.singleShot(5000, toast.deleteLater)
+
+    def _open_reading_dialog(self) -> None:
+        """Open the meter reading dialog."""
+
+        print("ОТКРЫТИЕ ОКНА ПОКАЗАНИЙ")
+
+        meters = list_meters(
+            self.current_property_id
+        )
+
+        print("ПОЛУЧЕННЫЕ ПРИБОРЫ:", meters)
+
+        for m in meters:
+            print(dict(m))
+
+
+
+        print("АДРЕС:", self.current_property_id)
+        print("ПРИБОРЫ:", meters)
+        
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Внести показания")
+        dialog.resize(420, 260)
+
+        layout = QVBoxLayout(dialog)
+
+        title = QLabel("Новое показание")
+        title.setStyleSheet(
+            "font-size: 19px; font-weight: 700;"
+        )
+
+        layout.addWidget(title)
+
+        form = QFormLayout()
+
+        meter_combo = QComboBox()
+
+        for meter in meters:
+            meter_combo.addItem(
+                f"{meter['meter_type']} ({meter['serial_number']})",
+                meter["id"],
+    )
+    
+        reading_input = QLineEdit()
+        reading_input.setPlaceholderText(
+            "Введите новое показание"
+        )
+
+        form.addRow("Прибор учета:", meter_combo)
+        form.addRow("Показания:", reading_input)
+
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+
+        buttons.rejected.connect(dialog.reject)
+
+        def save_reading() -> None:
+            """Save the entered meter reading."""
+            meter_id = meter_combo.currentData()
+
+            if meter_id is None:
+                QMessageBox.warning(
+                    dialog,
+                    "Ошибка",
+                    "Сначала добавьте прибор учета.",
+                )
+                return
+
+            try:
+                consumption = create_reading(
+                    int(meter_id),
+                    reading_input.text(),
+                )
+
+                dialog.accept()
+
+                self._load_meters()
+
+                QMessageBox.information(
+                    self,
+                    "Показания",
+                    (
+                        "Показание успешно сохранено.\n\n"
+                        f"Расход: {consumption:.2f}"
+                    ),
+                )
+
+            except Exception as error:
+                QMessageBox.warning(
+                    dialog,
+                    "Ошибка",
+                    str(error),
+                )
+
+        buttons.accepted.connect(save_reading)
+
+        layout.addWidget(buttons)
+
+        dialog.exec()
+
+    def closeEvent(self, event) -> None:
+        """Handle application close."""
+        event.accept()
